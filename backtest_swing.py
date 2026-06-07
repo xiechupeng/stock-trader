@@ -74,8 +74,8 @@ def backtest_single(df: pd.DataFrame, model: LSTMModel, symbol: str,
         pred_idx, conf = model.predict(context)
         pred_tok = swing_tokenizer.decode(pred_idx)
 
-        # 只在预测大波段（UP_L > 0.8% 或 UP_XL > 2%）时买入
-        pred_mag_ok = any(pred_tok.startswith(p) for p in ('UP_L_', 'UP_XL_'))
+        # 只在预测超大波段（UP_XL > 2%）时买入，UP_L 利润空间不够覆盖双边滞后
+        pred_mag_ok = pred_tok.startswith('UP_XL_')
 
         # ── TROUGH 确认 → 下一根 bar 买入
         if position is None and pivot.ptype == 'TROUGH':

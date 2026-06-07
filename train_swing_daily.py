@@ -16,9 +16,16 @@ from swing.binary_model import BinarySwingModel
 from config import CFG
 
 SYMBOLS_DAILY = [
-    "AAPL", "MSFT", "NVDA", "GOOGL", "META",
-    "AMZN", "TSLA", "JPM", "V", "SPY", "QQQ",
-    "AMD", "NFLX", "HOOD", "SCHW",
+    # 大盘科技
+    "AAPL", "MSFT", "NVDA", "GOOGL", "META", "AMZN", "TSLA",
+    # 金融
+    "JPM", "BAC", "GS", "V", "MA", "SCHW",
+    # 科技/半导体
+    "AMD", "INTC", "QCOM", "AVGO", "MU", "NFLX",
+    # ETF
+    "SPY", "QQQ", "IWM", "XLK", "XLF",
+    # 其他
+    "HOOD", "COIN", "PLTR", "UBER", "SHOP",
 ]
 
 DAILY_ZIGZAG_THRESH = 0.03   # 3%
@@ -120,23 +127,28 @@ def main():
     print(f"  正样本率: train={pos_rate*100:.1f}%  val={y_val.mean()*100:.1f}%")
     print(f"  pos_weight: {pos_weight:.2f}")
 
-    print(f"\n[2/3] 训练 LSTM (pos_weight={pos_weight:.1f})...")
-    mc = CFG.model
-    model = BinarySwingModel(
-        vocab_size=swing_tokenizer.VOCAB_SIZE,
-        embed_dim=32, hidden_dim=256, num_layers=2, dropout=0.25,
-        pos_weight=pos_weight,
+    # LSTM 需要 10k+ 样本；数据少时 GBM 更强
+    print(f"\n[2/3] 训练 GradientBoosting (小数据更佳)...")
+    from sklearn.ensemble import GradientBoostingClassifier
+    from sklearn.preprocessing import LabelEncoder
+    import joblib, os
+
+    # 把 token index 序列展平为特征向量
+    X_tr_flat  = X_tr.astype(float)
+    X_val_flat = X_val.astype(float)
+
+    clf = GradientBoostingClassifier(
+        n_estimators=300, max_depth=4,
+        learning_rate=0.05, subsample=0.8,
+        min_samples_leaf=20, random_state=42,
     )
-    model.fit(
-        X_tr, y_tr, X_val, y_val,
-        epochs=mc.epochs,
-        batch_size=256,
-        patience=mc.patience,
-        save_path="saved_models/swing_daily_binary.pt",
-    )
+    clf.fit(X_tr_flat, y_tr)
+    os.makedirs("saved_models", exist_ok=True)
+    joblib.dump(clf, "saved_models/swing_daily_gbm.pkl")
+    print("  GBM 已保存 → saved_models/swing_daily_gbm.pkl")
 
     print("\n[3/3] 评估 precision/recall @ 各置信度...")
-    probs = np.array([model.predict_proba(list(x)) for x in X_val])
+    probs = clf.predict_proba(X_val_flat)[:, 1]
     pos_base = y_val.mean()
     print(f"  随机基准 precision: {pos_base*100:.1f}%\n")
     for thresh in [0.30, 0.40, 0.50, 0.55, 0.60, 0.65, 0.70]:
@@ -150,7 +162,7 @@ def main():
         print(f"  thresh={thresh:.2f} | n={int(pp):4d} | "
               f"prec={prec:.3f} | rec={rec:.3f} | lift={lift:.2f}x")
 
-    print(f"\n🎉 模型 → saved_models/swing_daily_binary.pt\n")
+    print(f"\n🎉 模型 → saved_models/swing_daily_gbm.pkl\n")
 
 
 if __name__ == "__main__":

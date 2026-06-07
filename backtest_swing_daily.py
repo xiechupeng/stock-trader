@@ -28,7 +28,10 @@ def backtest_single(df: pd.DataFrame, model: BinarySwingModel, symbol: str,
                     min_confidence: float = 0.50,
                     commission: float = 0.001,
                     slippage: float = 0.0005,
-                    position_size_pct: float = 0.20) -> dict:
+                    position_size_pct: float = 0.20,
+                    stop_loss_pct: float = 0.10,
+                    trend_filter: bool = True,
+                    trend_ma: int = 200) -> dict:
     """
     日线 Swing 回测
     入场：TROUGH 确认当天的【次日 open】（模拟实盘：收盘后确认，次日开盘下单）
@@ -49,6 +52,9 @@ def backtest_single(df: pd.DataFrame, model: BinarySwingModel, symbol: str,
     closes = df["close"].values
     dates  = df.index
     n      = len(df)
+
+    # 趋势过滤：200日均线
+    ma200 = df["close"].rolling(trend_ma, min_periods=trend_ma//2).mean().values
 
     capital      = 100_000.0
     position     = None
@@ -75,8 +81,14 @@ def backtest_single(df: pd.DataFrame, model: BinarySwingModel, symbol: str,
 
         context = idxs[pi - seq_len : pi]
 
-        # ── TROUGH 确认 → 预测 → 买入
+        # ── TROUGH 确认 → 预测 → 买入（加趋势过滤）
         if position is None and pivot.ptype == "TROUGH":
+            # 趋势过滤：价格低于200日均线时不做多（空仓等待）
+            bar_ma = ma200[min(trade_bar, n-1)]
+            in_uptrend = (not trend_filter) or np.isnan(bar_ma) or (trade_price >= bar_ma * 0.95)
+            if not in_uptrend:
+                continue
+
             prob = model.predict_proba(context)
             if prob >= min_confidence:
                 slip   = trade_price * (1 + slippage)
@@ -88,10 +100,32 @@ def backtest_single(df: pd.DataFrame, model: BinarySwingModel, symbol: str,
                     "entry_price": slip, "entry_date": trade_date,
                     "shares": shares,    "cost": alloc - comm,
                     "entry_bar": trade_bar, "prob": prob,
+                    "stop_price": slip * (1 - stop_loss_pct),   # 止损价
                 }
 
+        # ── 已持仓：每日检查止损
+        elif position is not None:
+            cur_price = float(closes[min(trade_bar, n-1)])
+            if cur_price <= position["stop_price"]:
+                # 止损出场
+                slip     = cur_price * (1 - slippage)
+                proceeds = position["shares"] * slip
+                comm     = proceeds * commission
+                net      = proceeds - comm
+                pnl      = (net - position["cost"]) / position["cost"]
+                capital += net
+                trades.append({
+                    "symbol": symbol, "entry_price": position["entry_price"],
+                    "exit_price": slip, "entry_date": position["entry_date"],
+                    "exit_date": trade_date, "pnl_pct": pnl,
+                    "hold_days": trade_bar - position["entry_bar"],
+                    "entry_prob": position["prob"], "reason": "stop_loss",
+                })
+                position = None
+                continue
+
         # ── PEAK 确认 → 次日开盘卖出
-        elif position is not None and pivot.ptype == "PEAK":
+        if position is not None and pivot.ptype == "PEAK":
             slip     = trade_price * (1 - slippage)
             proceeds = position["shares"] * slip
             comm     = proceeds * commission
@@ -140,6 +174,10 @@ def main():
     parser.add_argument("--zigzag_thresh", type=float, default=DAILY_ZIGZAG_THRESH)
     parser.add_argument("--seq_len",       type=int,   default=12)
     parser.add_argument("--confidence",    type=float, default=0.55)
+    parser.add_argument("--stop_loss",     type=float, default=0.10,
+                        help="止损幅度（默认10%）")
+    parser.add_argument("--no_trend_filter", action="store_true",
+                        help="关闭200日均线趋势过滤")
     args = parser.parse_args()
 
     print(f"\n{'='*56}")
@@ -149,11 +187,15 @@ def main():
     print(f"  时间段           : {args.start} → {args.end}")
     print(f"{'='*56}\n")
 
-    print("[1/3] 加载模型...")
-    model = BinarySwingModel(vocab_size=swing_tokenizer.VOCAB_SIZE,
-                             embed_dim=32, hidden_dim=256,
-                             num_layers=2, dropout=0.25)
-    model.load("saved_models/swing_daily_binary.pt")
+    print("[1/3] 加载模型（GBM）...")
+    import joblib
+    clf = joblib.load("saved_models/swing_daily_gbm.pkl")
+
+    # 包装成统一接口
+    class GBMWrapper:
+        def predict_proba(self, ctx):
+            return float(clf.predict_proba([ctx])[0, 1])
+    model = GBMWrapper()
 
     print("[2/3] 加载日线数据...")
     results = {}
@@ -166,7 +208,9 @@ def main():
             r = backtest_single(df, model, sym,
                                 zigzag_thresh=args.zigzag_thresh,
                                 seq_len=args.seq_len,
-                                min_confidence=args.confidence)
+                                min_confidence=args.confidence,
+                                stop_loss_pct=args.stop_loss,
+                                trend_filter=not args.no_trend_filter)
             if r and r["trades"]:
                 results[sym] = r
         except Exception as e:
