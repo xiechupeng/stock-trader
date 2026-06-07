@@ -132,11 +132,11 @@ class Config:
         "AMZN", "TSLA", "JPM", "V", "SPY", "QQQ",
     ])
 
-    # 时间区间
-    train_start: str = "2015-01-01"
-    train_end:   str = "2022-12-31"
-    test_start:  str = "2023-01-01"
-    test_end:    str = "2024-12-31"
+    # 时间区间（Massive 免费版约2年历史，从当前往前推）
+    train_start: str = "2024-06-01"
+    train_end:   str = "2025-09-30"
+    test_start:  str = "2025-10-01"
+    test_end:    str = "2026-06-01"
 
     # Alpaca API（paper trading 默认）
     alpaca_key:     str = field(default_factory=lambda: os.getenv("ALPACA_API_KEY", ""))
