@@ -13,15 +13,15 @@ Swing Token 词表
 PAD = '<PAD>'
 UNK = '<UNK>'
 
-# 阈值（5分钟数据，std≈0.20%）
-# 幅度分档（根据实际分布：25th=0.07%, 75th=0.07% ← 对称，95th=0.23%）
-MAG_THRESHOLDS = [0.003, 0.008, 0.020]   # S < 0.3% ≤ M < 0.8% ≤ L < 2% ≤ XL
+# ── 5分钟 默认阈值 ────────────────────────────────────
+MAG_THRESHOLDS = [0.003, 0.008, 0.020]   # S<0.3% M<0.8% L<2% XL≥2%
+DUR_THRESHOLDS = [6, 18]                  # F≤6bar(30min) N≤18bar(1.5h) W>18bar
+VOL_THRESHOLDS = [0.7, 1.5]              # L<0.7x N<1.5x H≥1.5x
 
-# 时长分档（5min bars）
-DUR_THRESHOLDS = [6, 18]   # F≤6bars(30min) N≤18bars(1.5hr) W>18bars
-
-# 量能分档（相对 session 均量）
-VOL_THRESHOLDS = [0.7, 1.5]   # L<0.7x N<1.5x H≥1.5x
+# ── 日线 专用阈值（swing 平均幅度 ~6%，ZigZag thresh=3%）────
+DAILY_MAG_THRESHOLDS = [0.03, 0.07, 0.15] # S<3% M<7% L<15% XL≥15%
+DAILY_DUR_THRESHOLDS = [3, 10]             # F≤3天 N≤10天 W>10天
+DAILY_VOL_THRESHOLDS = [0.7, 1.5]         # 同 5min
 
 
 def _build_vocab():
@@ -41,7 +41,8 @@ VOCAB_SIZE = len(TOKEN2IDX)   # 74
 
 
 # ── 单 swing → token ─────────────────────────────────
-def swing_to_token(swing: dict, session_vol_avg: float) -> str:
+def swing_to_token(swing: dict, session_vol_avg: float,
+                   mag_thresh=None, dur_thresh=None, vol_thresh=None) -> str:
     """
     swing dict（来自 zigzag.pivots_to_swings）→ token string
     session_vol_avg: 当日或近期 rolling 均量（用于判断高/低量）
@@ -51,24 +52,25 @@ def swing_to_token(swing: dict, session_vol_avg: float) -> str:
     n_bars    = swing['n_bars']
     avg_vol   = swing['avg_vol']
 
+    mt = mag_thresh or MAG_THRESHOLDS
+    dt = dur_thresh or DUR_THRESHOLDS
+    vt = vol_thresh or VOL_THRESHOLDS
+
     d = 'UP' if direction == 'UP' else 'DN'
 
-    # 幅度
-    if magnitude < MAG_THRESHOLDS[0]:   m = 'S'
-    elif magnitude < MAG_THRESHOLDS[1]: m = 'M'
-    elif magnitude < MAG_THRESHOLDS[2]: m = 'L'
-    else:                               m = 'XL'
+    if magnitude < mt[0]:   m = 'S'
+    elif magnitude < mt[1]: m = 'M'
+    elif magnitude < mt[2]: m = 'L'
+    else:                   m = 'XL'
 
-    # 时长
-    if n_bars <= DUR_THRESHOLDS[0]:    dur = 'F'
-    elif n_bars <= DUR_THRESHOLDS[1]:  dur = 'N'
-    else:                              dur = 'W'
+    if n_bars <= dt[0]:    dur = 'F'
+    elif n_bars <= dt[1]:  dur = 'N'
+    else:                  dur = 'W'
 
-    # 量能
     ratio = avg_vol / session_vol_avg if session_vol_avg > 1e-8 else 1.0
-    if ratio >= VOL_THRESHOLDS[1]:    v = 'H'
-    elif ratio >= VOL_THRESHOLDS[0]:  v = 'N'
-    else:                             v = 'L'
+    if ratio >= vt[1]:    v = 'H'
+    elif ratio >= vt[0]:  v = 'N'
+    else:                 v = 'L'
 
     tok = f'{d}_{m}_{dur}_{v}'
     return tok if tok in TOKEN2IDX else UNK
