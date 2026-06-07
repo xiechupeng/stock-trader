@@ -29,6 +29,22 @@ class TokenConfig:
     gap_threshold: float       = 0.005 # 跳空 > 0.5%
 
 
+# 5分钟日内专用阈值（日线幅度的 1/7）
+INTRADAY_TOKEN_CONFIG = TokenConfig(
+    strong_up   =  0.0025,   # > +0.25%  → U2  (≈日线 5th→95th percentile)
+    weak_up     =  0.0005,   # +0.05%~+0.25% → U1
+    weak_down   = -0.0005,   # -0.25%~-0.05% → D1
+    strong_down = -0.0025,   # < -0.25%  → D2
+    high_vol_ratio = 1.5,
+    low_vol_ratio  = 0.7,
+    vol_avg_window = 78,     # 78根5min = 1交易日
+    big_body_ratio      = 0.65,
+    doji_body_ratio     = 0.10,
+    hammer_shadow_ratio = 2.0,
+    gap_threshold       = 0.001,  # 跳空 > 0.1%
+)
+
+
 # ─────────────────────────────────────────────────────
 # 2. 模型超参数
 # ─────────────────────────────────────────────────────
@@ -132,10 +148,10 @@ class Config:
         "AMZN", "TSLA", "JPM", "V", "SPY", "QQQ",
     ])
 
-    # 时间区间（Massive 免费版约2年历史，从当前往前推）
-    train_start: str = "2024-06-01"
-    train_end:   str = "2025-09-30"
-    test_start:  str = "2025-10-01"
+    # 时间区间（日线用 yfinance，可拿10年+历史）
+    train_start: str = "2015-01-01"
+    train_end:   str = "2024-12-31"
+    test_start:  str = "2025-01-01"
     test_end:    str = "2026-06-01"
 
     # Alpaca API（paper trading 默认）
