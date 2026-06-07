@@ -11,7 +11,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 from config import CFG
-from data.fetcher import fetch_multi
+from data.massive_fetcher import fetch_multi
 from models.model_factory import load_model
 from backtest.engine import BacktestEngine
 from backtest.metrics import print_metrics

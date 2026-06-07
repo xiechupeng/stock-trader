@@ -33,13 +33,20 @@ def fetch_ohlcv(
         return df
 
     print(f"[download] {symbol} {start} → {end}")
-    raw = yf.download(symbol, start=start, end=end, progress=False, auto_adjust=True)
+    raw = yf.download(symbol, start=start, end=end, progress=False,
+                      auto_adjust=True, multi_level_index=False)
     if raw.empty:
         raise ValueError(f"No data for {symbol}")
 
-    # 统一列名小写
+    # 统一列名小写（兼容新版 yfinance MultiIndex）
     df = raw.copy()
-    df.columns = [c.lower() for c in df.columns]
+    if isinstance(df.columns, pd.MultiIndex):
+        # 新版 yfinance: ('Close', 'AAPL') → 取第一层
+        df.columns = [c[0].lower() if isinstance(c, tuple) else c.lower()
+                      for c in df.columns]
+    else:
+        df.columns = [c.lower() if isinstance(c, str) else str(c).lower()
+                      for c in df.columns]
     df.index.name = "date"
 
     # 衍生特征

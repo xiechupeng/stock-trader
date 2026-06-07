@@ -36,8 +36,8 @@ class TokenConfig:
 class ModelConfig:
     sequence_length: int = 30      # 用过去30个token预测下一个
 
-    # Markov Chain
-    markov_order: int = 3          # trigram
+    # Markov Chain（order=1 防止 trigram 稀疏；训练数据充足后可升到2）
+    markov_order: int = 1          # bigram
 
     # LSTM
     lstm_embed_dim: int   = 64
@@ -65,14 +65,20 @@ class ModelConfig:
 # ─────────────────────────────────────────────────────
 @dataclass
 class TradingConfig:
-    min_confidence: float = 0.60   # 模型预测置信度阈值
+    min_confidence: float = 0.10   # Markov bigram: top-1 通常在 0.10~0.20，此为合理下界
 
-    # 触发买入的 token（下一根K线预期）
+    # 触发买入的 token（下一根K线预期为强势上涨）
     buy_tokens: List[str] = field(default_factory=lambda: [
         "U2_BIG_BULL_HIGH",
         "U2_BIG_BULL_NORMAL",
+        "U2_BIG_BULL_LOW",
         "U2_ENGULF_BULL_HIGH",
+        "U2_ENGULF_BULL_NORMAL",
+        "U2_GAP_UP_HIGH",
+        "U2_GAP_UP_NORMAL",
+        "U1_BIG_BULL_HIGH",
         "U1_HAMMER_HIGH",
+        "U1_HAMMER_NORMAL",
         "U1_ENGULF_BULL_HIGH",
     ])
 
@@ -80,7 +86,12 @@ class TradingConfig:
     sell_tokens: List[str] = field(default_factory=lambda: [
         "D2_BIG_BEAR_HIGH",
         "D2_BIG_BEAR_NORMAL",
+        "D2_BIG_BEAR_LOW",
         "D2_ENGULF_BEAR_HIGH",
+        "D2_ENGULF_BEAR_NORMAL",
+        "D2_GAP_DOWN_HIGH",
+        "D2_GAP_DOWN_NORMAL",
+        "D1_BIG_BEAR_HIGH",
         "D1_SHOOTING_STAR_HIGH",
         "D1_ENGULF_BEAR_HIGH",
     ])

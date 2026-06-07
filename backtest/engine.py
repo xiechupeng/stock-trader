@@ -87,7 +87,8 @@ class BacktestEngine:
                     exit_reason = "max_hold"
 
                 if exit_reason:
-                    capital, trade_rec = self._close_position(position, price, exit_reason)
+                    net, trade_rec = self._close_position(position, price, exit_reason)
+                    capital += net   # ← 把仓位收益加回剩余现金
                     trades.append(trade_rec)
                     position = None
                     continue
@@ -109,7 +110,8 @@ class BacktestEngine:
 
         # ── 强制平仓剩余仓位
         if position and closes:
-            capital, trade_rec = self._close_position(position, closes[-1], "end_of_test")
+            net, trade_rec = self._close_position(position, closes[-1], "end_of_test")
+            capital += net
             trades.append(trade_rec)
 
         equity_df = pd.DataFrame(equity_curve).set_index("date")["equity"]

@@ -40,11 +40,16 @@ def create_model(model_type: str):
 
 
 def load_model(model_type: str):
-    model = create_model(model_type)
     path = {
         "markov":      "saved_models/markov.json",
         "lstm":        "saved_models/lstm_best.pt",
         "transformer": "saved_models/transformer_best.pt",
     }[model_type]
-    model.load(path)
-    return model
+    if model_type == "markov":
+        # classmethod：返回新实例，必须接收返回值
+        return MarkovModel.load(path)
+    else:
+        # LSTM/Transformer：load() 是实例方法，in-place 修改
+        model = create_model(model_type)
+        model.load(path)
+        return model

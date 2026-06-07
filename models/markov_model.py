@@ -41,7 +41,7 @@ class MarkovModel:
     def predict_proba(self, context: list[int]) -> np.ndarray:
         """
         context: 最近 order 个 token index
-        返回 shape [vocab_size] 的概率数组
+        返回 shape [vocab_size] 的概率数组（PAD/UNK 已置零）
         """
         assert self.vocab_size, "vocab_size 未设置"
         key = tuple(context[-self.order:])
@@ -50,7 +50,17 @@ class MarkovModel:
         probs = np.full(self.vocab_size, self.smoothing)
         for idx, cnt in raw.items():
             probs[idx] += cnt
-        probs /= probs.sum()
+
+        # 屏蔽 PAD(0) 和 UNK(1)，不让模型预测这两个特殊符号
+        probs[0] = 0.0   # <PAD>
+        probs[1] = 0.0   # <UNK>
+
+        total = probs.sum()
+        if total < 1e-12:
+            # 完全未见过的 context：均匀分布在有效 token 上
+            probs[2:] = 1.0 / (self.vocab_size - 2)
+        else:
+            probs /= total
         return probs
 
     def predict(self, context: list[int]) -> tuple[int, float]:

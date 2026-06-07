@@ -5,7 +5,7 @@ python train.py --model [markov|lstm|transformer] --symbols AAPL MSFT NVDA
 import argparse
 import numpy as np
 from config import CFG
-from data.fetcher import fetch_multi
+from data.massive_fetcher import fetch_multi
 from tokenizer.combined import CombinedTokenizer, make_sequences
 from models.model_factory import create_model
 
@@ -25,8 +25,17 @@ def build_dataset(symbols: list[str], start: str, end: str):
     X_all, y_all = [], []
     for idxs in all_idxs:
         X, y = make_sequences(idxs, seq_len)
-        X_all.append(X)
-        y_all.append(y)
+        if len(X) > 0:
+            X_all.append(X)
+            y_all.append(y)
+
+    if not X_all:
+        loaded = list(dfs.keys())
+        raise RuntimeError(
+            f"数据为空，无法训练。\n"
+            f"已加载股票: {loaded}\n"
+            f"请检查：1) 网络连接  2) 日期范围 {start}→{end}  3) 缓存目录 {CFG.cache_dir}"
+        )
 
     X = np.concatenate(X_all)
     y = np.concatenate(y_all)

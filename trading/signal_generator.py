@@ -9,7 +9,7 @@ from typing import Optional
 
 from config import TradingConfig, CFG
 from tokenizer.combined import CombinedTokenizer
-from data.fetcher import fetch_ohlcv
+from data.massive_fetcher import fetch_symbol as fetch_ohlcv
 
 
 @dataclass
